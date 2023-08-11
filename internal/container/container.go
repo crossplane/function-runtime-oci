@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/crossplane/crossplane-runtime/pkg/errors"
@@ -132,6 +133,7 @@ func NewContainerRunner(o ...RunnerOption) *Runner {
 func (r *Runner) Register(srv *grpc.Server) error {
 	// TODO(negz): Limit concurrent function runs?
 	v1beta1.RegisterFunctionRunnerServiceServer(srv, r)
+	reflection.Register(srv)
 	return nil
 }
 
