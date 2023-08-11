@@ -26,6 +26,7 @@ import (
 
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 
+	"github.com/upbound/xfn-oci/cmd/xfn-oci/internal/config"
 	"github.com/upbound/xfn-oci/cmd/xfn-oci/run"
 	"github.com/upbound/xfn-oci/cmd/xfn-oci/spark"
 	"github.com/upbound/xfn-oci/cmd/xfn-oci/start"
@@ -43,8 +44,7 @@ type versionFlag bool
 
 // Command is the entrypoint for the CLI.
 var Command struct {
-	DefaultImage string `short:"i" help:"Default image used to fetch containers when not specified in tag." env:"DEFAULT_IMAGE"`
-	Registry     string `short:"r" help:"Default registry used to fetch containers when not specified in tag." default:"${default_registry}" env:"REGISTRY"`
+	config.Args `embed:""`
 
 	Debug   debugFlag   `short:"d" help:"Print verbose logging statements."`
 	Version versionFlag `short:"v" help:"Print version and quit."`
@@ -82,5 +82,5 @@ func main() {
 		kongVars,
 	)
 
-	ctx.FatalIfErrorf(ctx.Run(Command.Registry, Command.DefaultImage))
+	ctx.FatalIfErrorf(ctx.Run(&Command.Args))
 }

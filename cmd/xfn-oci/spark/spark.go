@@ -37,6 +37,7 @@ import (
 
 	"github.com/crossplane/crossplane/apis/apiextensions/fn/proto/v1beta1"
 
+	"github.com/upbound/xfn-oci/cmd/xfn-oci/internal/config"
 	v1beta12 "github.com/upbound/xfn-oci/internal/container"
 	"github.com/upbound/xfn-oci/internal/container/proto"
 	"github.com/upbound/xfn-oci/internal/oci"
@@ -84,7 +85,7 @@ type Command struct {
 // Run a Composition Function inside an unprivileged user namespace. Reads a
 // protocol buffer serialized RunFunctionRequest from stdin, and writes a
 // protocol buffer serialized RunFunctionResponse to stdout.
-func (c *Command) Run(registry, defaultImage string) error { //nolint:gocyclo // TODO(negz): Refactor some of this out into functions, add tests.
+func (c *Command) Run(args *config.Args) error { //nolint:gocyclo // TODO(negz): Refactor some of this out into functions, add tests.
 	pb, err := io.ReadAll(os.Stdin)
 	if err != nil {
 		return errors.Wrap(err, errReadRequest)
@@ -142,10 +143,10 @@ func (c *Command) Run(registry, defaultImage string) error { //nolint:gocyclo //
 
 	img := conf.Spec.GetImage()
 	if img == "" {
-		img = defaultImage
+		img = args.DefaultImage
 	}
 
-	r, err := name.ParseReference(img, name.WithDefaultRegistry(registry))
+	r, err := name.ParseReference(img, name.WithDefaultRegistry(args.Registry))
 	if err != nil {
 		return errors.Wrap(err, errParseRef)
 	}

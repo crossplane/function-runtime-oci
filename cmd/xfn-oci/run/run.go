@@ -32,6 +32,7 @@ import (
 
 	xpFn "github.com/crossplane/crossplane/apis/apiextensions/fn/proto/v1beta1"
 
+	"github.com/upbound/xfn-oci/cmd/xfn-oci/internal/config"
 	"github.com/upbound/xfn-oci/internal/container"
 	"github.com/upbound/xfn-oci/internal/container/proto"
 )
@@ -62,7 +63,7 @@ type Command struct {
 }
 
 // Run a Composition container function.
-func (c *Command) Run(registry, defaultImage string) error { //nolint:gocyclo // the complexity is in the switch statement
+func (c *Command) Run(args *config.Args) error { //nolint:gocyclo // the complexity is in the switch statement
 	// If we don't have CAP_SETUID or CAP_SETGID, we'll only be able to map our
 	// own UID and GID to root inside the user namespace.
 	rootUID := os.Getuid()
@@ -73,7 +74,7 @@ func (c *Command) Run(registry, defaultImage string) error { //nolint:gocyclo //
 		rootGID = c.MapRootGID
 	}
 
-	ref, err := name.ParseReference(defaultImage, name.WithDefaultRegistry(registry))
+	ref, err := name.ParseReference(args.DefaultImage, name.WithDefaultRegistry(args.Registry))
 	if err != nil {
 		return errors.Wrap(err, errParseImage)
 	}
@@ -118,7 +119,12 @@ func (c *Command) Run(registry, defaultImage string) error { //nolint:gocyclo //
 		}
 
 	}
-	f := container.NewContainerRunner(container.SetUID(setuid), container.MapToRoot(rootUID, rootGID), container.WithCacheDir(filepath.Clean(c.CacheDir)), container.WithRegistry(registry))
+	f := container.NewContainerRunner(
+		container.SetUID(setuid),
+		container.MapToRoot(rootUID, rootGID),
+		container.WithCacheDir(filepath.Clean(c.CacheDir)),
+		container.WithRegistry(args.Registry),
+	)
 	rsp, err := f.RunFunction(context.Background(), &req)
 	if err != nil {
 		return errors.Wrap(err, errRunFunction)

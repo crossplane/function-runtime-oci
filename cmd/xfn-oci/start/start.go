@@ -28,6 +28,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/errors"
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 
+	"github.com/upbound/xfn-oci/cmd/xfn-oci/internal/config"
 	"github.com/upbound/xfn-oci/internal/container"
 )
 
@@ -47,7 +48,7 @@ type Command struct {
 }
 
 // Run a Composition Function gRPC API.
-func (c *Command) Run(registry, defaultImage string, log logging.Logger) error {
+func (c *Command) Run(args *config.Args, log logging.Logger) error {
 	// If we don't have CAP_SETUID or CAP_SETGID, we'll only be able to map our
 	// own UID and GID to root inside the user namespace.
 	rootUID := os.Getuid()
@@ -64,8 +65,8 @@ func (c *Command) Run(registry, defaultImage string, log logging.Logger) error {
 		container.MapToRoot(rootUID, rootGID),
 		container.WithCacheDir(filepath.Clean(c.CacheDir)),
 		container.WithLogger(log),
-		container.WithRegistry(registry),
-		container.WithDefaultImage(defaultImage),
+		container.WithRegistry(args.Registry),
+		container.WithDefaultImage(args.DefaultImage),
 	)
 
 	log.Debug("Listening", "network", c.Network, "address", c.Address)
