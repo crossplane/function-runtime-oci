@@ -21,6 +21,7 @@ import (
 	"net"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 
 	"github.com/crossplane/crossplane-runtime/pkg/errors"
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
@@ -116,6 +117,7 @@ func (r *Runner) ListenAndServe(network, address string) error {
 
 	// TODO(negz): Limit concurrent function runs?
 	srv := grpc.NewServer()
+	reflection.Register(srv)
 	v1alpha1.RegisterContainerizedFunctionRunnerServiceServer(srv, r)
 	return errors.Wrap(srv.Serve(lis), errServe)
 }
