@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package function_runtime_oci
+package container
 
 import (
 	"io"
@@ -36,9 +36,9 @@ const (
 
 const defaultCacheDir = "/function-runtime-oci"
 
-// An ContainerRunner runs a Composition Function packaged as an OCI image by
+// A Runner runs a Composition Function packaged as an OCI image by
 // extracting it and running it as a 'rootless' container.
-type ContainerRunner struct {
+type Runner struct {
 	v1alpha1.UnimplementedContainerizedFunctionRunnerServiceServer
 
 	log logging.Logger
@@ -50,13 +50,13 @@ type ContainerRunner struct {
 	registry string
 }
 
-// A ContainerRunnerOption configures a new ContainerRunner.
-type ContainerRunnerOption func(*ContainerRunner)
+// A RunnerOption configures a new Runner.
+type RunnerOption func(*Runner)
 
 // MapToRoot configures what UID and GID should map to root (UID/GID 0) in the
 // user namespace in which the function will be run.
-func MapToRoot(uid, gid int) ContainerRunnerOption {
-	return func(r *ContainerRunner) {
+func MapToRoot(uid, gid int) RunnerOption {
+	return func(r *Runner) {
 		r.rootUID = uid
 		r.rootGID = gid
 	}
@@ -65,40 +65,40 @@ func MapToRoot(uid, gid int) ContainerRunnerOption {
 // SetUID indicates that the container runner should attempt operations that
 // require CAP_SETUID and CAP_SETGID, for example creating a user namespace that
 // maps arbitrary UIDs and GIDs to the parent namespace.
-func SetUID(s bool) ContainerRunnerOption {
-	return func(r *ContainerRunner) {
+func SetUID(s bool) RunnerOption {
+	return func(r *Runner) {
 		r.setuid = s
 	}
 }
 
 // WithCacheDir specifies the directory used for caching function images and
 // containers.
-func WithCacheDir(d string) ContainerRunnerOption {
-	return func(r *ContainerRunner) {
+func WithCacheDir(d string) RunnerOption {
+	return func(r *Runner) {
 		r.cache = d
 	}
 }
 
 // WithRegistry specifies the default registry used to retrieve function images and
 // containers.
-func WithRegistry(dr string) ContainerRunnerOption {
-	return func(r *ContainerRunner) {
+func WithRegistry(dr string) RunnerOption {
+	return func(r *Runner) {
 		r.registry = dr
 	}
 }
 
 // WithLogger configures which logger the container runner should use. Logging
 // is disabled by default.
-func WithLogger(l logging.Logger) ContainerRunnerOption {
-	return func(cr *ContainerRunner) {
+func WithLogger(l logging.Logger) RunnerOption {
+	return func(cr *Runner) {
 		cr.log = l
 	}
 }
 
-// NewContainerRunner returns a new Runner that runs functions as rootless
+// NewRunner returns a new Runner that runs functions as rootless
 // containers.
-func NewContainerRunner(o ...ContainerRunnerOption) *ContainerRunner {
-	r := &ContainerRunner{cache: defaultCacheDir, log: logging.NewNopLogger()}
+func NewRunner(o ...RunnerOption) *Runner {
+	r := &Runner{cache: defaultCacheDir, log: logging.NewNopLogger()}
 	for _, fn := range o {
 		fn(r)
 	}
@@ -107,7 +107,7 @@ func NewContainerRunner(o ...ContainerRunnerOption) *ContainerRunner {
 }
 
 // ListenAndServe gRPC connections at the supplied address.
-func (r *ContainerRunner) ListenAndServe(network, address string) error {
+func (r *Runner) ListenAndServe(network, address string) error {
 	r.log.Debug("Listening", "network", network, "address", address)
 	lis, err := net.Listen(network, address)
 	if err != nil {
