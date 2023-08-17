@@ -29,7 +29,7 @@ import (
 
 	"github.com/crossplane/crossplane-runtime/pkg/errors"
 
-	"github.com/crossplane/function-runtime-oci/cmd/function-runtime-oci/start"
+	"github.com/crossplane/function-runtime-oci/cmd/function-runtime-oci/internal/config"
 	"github.com/crossplane/function-runtime-oci/internal/container"
 	"github.com/crossplane/function-runtime-oci/internal/proto/v1alpha1"
 )
@@ -60,7 +60,7 @@ type Command struct {
 }
 
 // Run a Composition container function.
-func (c *Command) Run(args *start.Args) error {
+func (c *Command) Run(args *config.Args) error {
 	// If we don't have CAP_SETUID or CAP_SETGID, we'll only be able to map our
 	// own UID and GID to root inside the user namespace.
 	rootUID := os.Getuid()

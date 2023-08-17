@@ -25,6 +25,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/errors"
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 
+	"github.com/crossplane/function-runtime-oci/cmd/function-runtime-oci/internal/config"
 	"github.com/crossplane/function-runtime-oci/internal/container"
 )
 
@@ -32,12 +33,6 @@ import (
 const (
 	errListenAndServe = "cannot listen for and serve gRPC API"
 )
-
-// Args contains the default registry used to pull function-runtime-oci
-// containers.
-type Args struct {
-	Registry string
-}
 
 // Command starts a gRPC API to run Composition Functions.
 type Command struct {
@@ -49,7 +44,7 @@ type Command struct {
 }
 
 // Run a Composition Function gRPC API.
-func (c *Command) Run(args *Args, log logging.Logger) error {
+func (c *Command) Run(args *config.Args, log logging.Logger) error {
 	// If we don't have CAP_SETUID or CAP_SETGID, we'll only be able to map our
 	// own UID and GID to root inside the user namespace.
 	rootUID := os.Getuid()

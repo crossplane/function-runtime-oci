@@ -26,6 +26,7 @@ import (
 
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 
+	"github.com/crossplane/function-runtime-oci/cmd/function-runtime-oci/internal/config"
 	"github.com/crossplane/function-runtime-oci/cmd/function-runtime-oci/run"
 	"github.com/crossplane/function-runtime-oci/cmd/function-runtime-oci/spark"
 	"github.com/crossplane/function-runtime-oci/cmd/function-runtime-oci/start"
@@ -44,8 +45,8 @@ var KongVars = kong.Vars{
 var cli struct {
 	Debug debugFlag `short:"d" help:"Print verbose logging statements."`
 
-	Version  versionFlag `short:"v" help:"Print version and quit."`
-	Registry string      `short:"r" help:"Default registry used to fetch containers when not specified in tag." default:"${default_registry}" env:"REGISTRY"`
+	Version     versionFlag `short:"v" help:"Print version and quit."`
+	config.Args `embed:""`
 
 	Start start.Command `cmd:"" help:"Start listening for Composition Function runs over gRPC." default:"1"`
 	Run   run.Command   `cmd:"" help:"Run a Composition Function."`
@@ -76,8 +77,9 @@ func main() {
 		kong.Name("function-runtime-oci"),
 		kong.Description("Crossplane Composition Functions."),
 		kong.BindTo(logging.NewLogrLogger(zl), (*logging.Logger)(nil)),
+		kong.BindTo(cli.Args, (*config.Args)(nil)),
 		kong.UsageOnError(),
 		KongVars,
 	)
-	ctx.FatalIfErrorf(ctx.Run(&start.Args{Registry: cli.Registry}))
+	ctx.FatalIfErrorf(ctx.Run())
 }
