@@ -30,7 +30,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/errors"
 
 	"github.com/crossplane/function-runtime-oci/cmd/function-runtime-oci/start"
-	"github.com/crossplane/function-runtime-oci/internal/function-runtime-oci"
+	"github.com/crossplane/function-runtime-oci/internal/container"
 	"github.com/crossplane/function-runtime-oci/internal/proto/v1alpha1"
 )
 
@@ -65,7 +65,7 @@ func (c *Command) Run(args *start.Args) error {
 	// own UID and GID to root inside the user namespace.
 	rootUID := os.Getuid()
 	rootGID := os.Getgid()
-	setuid := function_runtime_oci.HasCapSetUID() && function_runtime_oci.HasCapSetGID() // We're using 'setuid' as shorthand for both here.
+	setuid := container.HasCapSetUID() && container.HasCapSetGID() // We're using 'setuid' as shorthand for both here.
 	if setuid {
 		rootUID = c.MapRootUID
 		rootGID = c.MapRootGID
@@ -91,7 +91,7 @@ func (c *Command) Run(args *start.Args) error {
 		return errors.Wrap(err, errAuthCfg)
 	}
 
-	f := function_runtime_oci.NewContainerRunner(function_runtime_oci.SetUID(setuid), function_runtime_oci.MapToRoot(rootUID, rootGID), function_runtime_oci.WithCacheDir(filepath.Clean(c.CacheDir)), function_runtime_oci.WithRegistry(args.Registry))
+	f := container.NewRunner(container.SetUID(setuid), container.MapToRoot(rootUID, rootGID), container.WithCacheDir(filepath.Clean(c.CacheDir)), container.WithRegistry(args.Registry))
 	rsp, err := f.RunFunction(context.Background(), &v1alpha1.RunFunctionRequest{
 		Image: c.Image,
 		Input: c.FunctionIO,

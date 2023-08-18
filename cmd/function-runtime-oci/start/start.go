@@ -25,7 +25,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/errors"
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 
-	"github.com/crossplane/function-runtime-oci/internal/function-runtime-oci"
+	"github.com/crossplane/function-runtime-oci/internal/container"
 )
 
 // Error strings
@@ -54,18 +54,18 @@ func (c *Command) Run(args *Args, log logging.Logger) error {
 	// own UID and GID to root inside the user namespace.
 	rootUID := os.Getuid()
 	rootGID := os.Getgid()
-	setuid := function_runtime_oci.HasCapSetUID() && function_runtime_oci.HasCapSetGID() // We're using 'setuid' as shorthand for both here.
+	setuid := container.HasCapSetUID() && container.HasCapSetGID() // We're using 'setuid' as shorthand for both here.
 	if setuid {
 		rootUID = c.MapRootUID
 		rootGID = c.MapRootGID
 	}
 
 	// TODO(negz): Expose a healthz endpoint and otel metrics.
-	f := function_runtime_oci.NewContainerRunner(
-		function_runtime_oci.SetUID(setuid),
-		function_runtime_oci.MapToRoot(rootUID, rootGID),
-		function_runtime_oci.WithCacheDir(filepath.Clean(c.CacheDir)),
-		function_runtime_oci.WithLogger(log),
-		function_runtime_oci.WithRegistry(args.Registry))
+	f := container.NewRunner(
+		container.SetUID(setuid),
+		container.MapToRoot(rootUID, rootGID),
+		container.WithCacheDir(filepath.Clean(c.CacheDir)),
+		container.WithLogger(log),
+		container.WithRegistry(args.Registry))
 	return errors.Wrap(f.ListenAndServe(c.Network, c.Address), errListenAndServe)
 }

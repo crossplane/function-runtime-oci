@@ -16,7 +16,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package function_runtime_oci
+package container
 
 import (
 	"os/exec"

@@ -16,7 +16,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package function_runtime_oci
+package container
 
 import (
 	"context"
@@ -35,6 +35,6 @@ func HasCapSetUID() bool { return false }
 func HasCapSetGID() bool { return false }
 
 // RunFunction returns an error on non-Linux.
-func (r *ContainerRunner) RunFunction(_ context.Context, _ *v1alpha1.RunFunctionRequest) (*v1alpha1.RunFunctionResponse, error) {
+func (r *Runner) RunFunction(_ context.Context, _ *v1alpha1.RunFunctionRequest) (*v1alpha1.RunFunctionResponse, error) {
 	return nil, errors.New(errLinuxOnly)
 }

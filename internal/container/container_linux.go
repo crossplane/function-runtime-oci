@@ -16,7 +16,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package function_runtime_oci
+package container
 
 import (
 	"bytes"
@@ -82,7 +82,7 @@ func HasCapSetGID() bool {
 // RunFunction runs a function as a rootless OCI container. Functions that
 // return non-zero, or that cannot be executed in the first place (e.g. because
 // they cannot be fetched from the registry) will return an error.
-func (r *ContainerRunner) RunFunction(ctx context.Context, req *v1alpha1.RunFunctionRequest) (*v1alpha1.RunFunctionResponse, error) {
+func (r *Runner) RunFunction(ctx context.Context, req *v1alpha1.RunFunctionRequest) (*v1alpha1.RunFunctionResponse, error) {
 	r.log.Debug("Running function", "image", req.Image)
 
 	/*
