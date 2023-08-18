@@ -28,7 +28,7 @@ GO_STATIC_PACKAGES = $(GO_PROJECT)/cmd/function-runtime-oci
 GO_LDFLAGS += -X $(GO_PROJECT)/internal/version.version=$(VERSION)
 GO_SUBDIRS += cmd internal
 GO111MODULE = on
-GOLANGCILINT_VERSION = 1.53.3
+GOLANGCILINT_VERSION = 1.54.1
 -include build/makelib/golang.mk
 
 # ====================================================================================
