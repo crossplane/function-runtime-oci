@@ -22,7 +22,7 @@ import "google/protobuf/duration.proto";
 
 package apiextensions.fn.proto.v1alpha1;
 
-option go_package = "github.com/crossplane/function-runtime-oci/internal/proto/v1alpha1";
+option go_package = "github.com/crossplane/crossplane/apis/apiextensions/fn/proto/v1alpha1";
 
 // A ContainerizedFunctionRunnerService runs containerized Composition Functions.
 service ContainerizedFunctionRunnerService {
