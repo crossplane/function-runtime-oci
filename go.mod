@@ -10,7 +10,7 @@ require (
 	github.com/cyphar/filepath-securejoin v0.2.3
 	github.com/google/go-cmp v0.5.9
 	github.com/google/go-containerregistry v0.16.1
-	github.com/google/uuid v1.3.0
+	github.com/google/uuid v1.3.1
 	github.com/opencontainers/runtime-spec v1.1.0
 	golang.org/x/sync v0.3.0
 	golang.org/x/sys v0.11.0
