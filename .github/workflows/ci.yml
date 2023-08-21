@@ -18,7 +18,7 @@ env:
 
 jobs:
   detect-noop:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     outputs:
       noop: ${{ steps.noop.outputs.should_skip }}
     steps:
@@ -32,7 +32,7 @@ jobs:
           concurrent_skipping: false
 
   lint:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: detect-noop
     if: needs.detect-noop.outputs.noop != 'true'
 
@@ -58,7 +58,7 @@ jobs:
           args: --timeout 3m
 
   check-diff:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: detect-noop
     if: needs.detect-noop.outputs.noop != 'true'
 
@@ -77,7 +77,7 @@ jobs:
         run: make check-diff
 
   build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: detect-noop
     if: needs.detect-noop.outputs.noop != 'true'
 
@@ -101,7 +101,7 @@ jobs:
           make build.code.platform PLATFORM=linux_arm64
 
   unit-tests:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: detect-noop
     if: needs.detect-noop.outputs.noop != 'true'
 
@@ -129,7 +129,7 @@ jobs:
           file: _output/tests/linux_amd64/coverage.txt
 
   publish-artifacts:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: detect-noop
     if: needs.detect-noop.outputs.noop != 'true'
 
