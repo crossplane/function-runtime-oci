@@ -26,7 +26,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/errors"
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 
-	"github.com/crossplane/function-runtime-oci/internal/proto/v1alpha1"
+	"github.com/crossplane/function-runtime-oci/internal/proto/v1beta1"
 )
 
 // Error strings.
@@ -35,20 +35,17 @@ const (
 	errServe  = "cannot serve gRPC API"
 )
 
-const defaultCacheDir = "/function-runtime-oci"
-
 // A Runner runs a Composition Function packaged as an OCI image by
 // extracting it and running it as a 'rootless' container.
 type Runner struct {
-	v1alpha1.UnimplementedContainerizedFunctionRunnerServiceServer
+	v1beta1.UnimplementedFunctionRunnerServiceServer
 
 	log logging.Logger
 
-	rootUID  int
-	rootGID  int
-	setuid   bool // Specifically, CAP_SETUID and CAP_SETGID.
-	cache    string
-	registry string
+	rootUID      int
+	rootGID      int
+	setuid       bool // Specifically, CAP_SETUID and CAP_SETGID.
+	imageTarBall string
 }
 
 // A RunnerOption configures a new Runner.
@@ -72,22 +69,6 @@ func SetUID(s bool) RunnerOption {
 	}
 }
 
-// WithCacheDir specifies the directory used for caching function images and
-// containers.
-func WithCacheDir(d string) RunnerOption {
-	return func(r *Runner) {
-		r.cache = d
-	}
-}
-
-// WithRegistry specifies the default registry used to retrieve function images and
-// containers.
-func WithRegistry(dr string) RunnerOption {
-	return func(r *Runner) {
-		r.registry = dr
-	}
-}
-
 // WithLogger configures which logger the container runner should use. Logging
 // is disabled by default.
 func WithLogger(l logging.Logger) RunnerOption {
@@ -96,10 +77,18 @@ func WithLogger(l logging.Logger) RunnerOption {
 	}
 }
 
+// WithImageTarBall configures the path to the OCI image tarball that should be
+// used to run functions.
+func WithImageTarBall(tarball string) RunnerOption {
+	return func(cr *Runner) {
+		cr.imageTarBall = tarball
+	}
+}
+
 // NewRunner returns a new Runner that runs functions as rootless
 // containers.
 func NewRunner(o ...RunnerOption) *Runner {
-	r := &Runner{cache: defaultCacheDir, log: logging.NewNopLogger()}
+	r := &Runner{log: logging.NewNopLogger()}
 	for _, fn := range o {
 		fn(r)
 	}
@@ -118,7 +107,7 @@ func (r *Runner) ListenAndServe(network, address string) error {
 	// TODO(negz): Limit concurrent function runs?
 	srv := grpc.NewServer()
 	reflection.Register(srv)
-	v1alpha1.RegisterContainerizedFunctionRunnerServiceServer(srv, r)
+	v1beta1.RegisterFunctionRunnerServiceServer(srv, r)
 	return errors.Wrap(srv.Serve(lis), errServe)
 }
 

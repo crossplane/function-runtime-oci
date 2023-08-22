@@ -32,7 +32,7 @@ import (
 
 	"github.com/crossplane/crossplane-runtime/pkg/errors"
 
-	"github.com/crossplane/function-runtime-oci/internal/proto/v1alpha1"
+	"github.com/crossplane/function-runtime-oci/internal/proto/v1beta1"
 )
 
 // NOTE(negz): Technically _all_ of the containerized Composition Functions
@@ -45,7 +45,7 @@ import (
 // Error strings.
 const (
 	errCreateStdioPipes  = "cannot create stdio pipes"
-	errStartSpark        = "cannot start " + spark
+	errFmtStartSpark     = "cannot start " + spark + ": %v"
 	errCloseStdin        = "cannot close stdin pipe"
 	errReadStdout        = "cannot read from stdout pipe"
 	errReadStderr        = "cannot read from stderr pipe"
@@ -82,8 +82,7 @@ func HasCapSetGID() bool {
 // RunFunction runs a function as a rootless OCI container. Functions that
 // return non-zero, or that cannot be executed in the first place (e.g. because
 // they cannot be fetched from the registry) will return an error.
-func (r *Runner) RunFunction(ctx context.Context, req *v1alpha1.RunFunctionRequest) (*v1alpha1.RunFunctionResponse, error) {
-	r.log.Debug("Running function", "image", req.Image)
+func (r *Runner) RunFunction(ctx context.Context, req *v1beta1.RunFunctionRequest) (*v1beta1.RunFunctionResponse, error) {
 
 	/*
 		We want to create an overlayfs with the cached rootfs as the lower layer
@@ -95,11 +94,15 @@ func (r *Runner) RunFunction(ctx context.Context, req *v1alpha1.RunFunctionReque
 
 		Therefore we execute a shim - function-runtime-oci spark - in a new user
 		and mount namespace. spark fetches and caches the image, creates an OCI
-		runtime bundle, then executes an OCI runtime in order to actually
+		runtime bundle, then executes an OCI runtime in order to actually
 		execute the function.
 	*/
-	cmd := exec.CommandContext(ctx, os.Args[0], spark, "--cache-dir="+r.cache, "--registry="+r.registry, //nolint:gosec // We're intentionally executing with variable input.
-		fmt.Sprintf("--max-stdio-bytes=%d", MaxStdioBytes))
+
+	cmd := exec.CommandContext(ctx, os.Args[0], spark, //nolint:gosec // We're intentionally executing with variable input.
+		fmt.Sprintf("--max-stdio-bytes=%d", MaxStdioBytes),
+		"--image-tar-ball="+r.imageTarBall,
+		// TODO(phisco): pass the resources via the spark flags --resources.memory-limit/cpu-limit/network-policy
+	)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Cloneflags:  syscall.CLONE_NEWUSER | syscall.CLONE_NEWNS,
 		UidMappings: []syscall.SysProcIDMap{{ContainerID: 0, HostID: r.rootUID, Size: 1}},
@@ -148,7 +151,7 @@ func (r *Runner) RunFunction(ctx context.Context, req *v1alpha1.RunFunctionReque
 		return nil, errors.Wrap(err, errMarshalRequest)
 	}
 	if err := cmd.Start(); err != nil {
-		return nil, errors.Wrap(err, errStartSpark)
+		return nil, errors.Wrap(err, fmt.Sprintf(errFmtStartSpark, cmd.Args))
 	}
 	if _, err := stdio.Stdin.Write(b); err != nil {
 		return nil, errors.Wrap(err, errWriteRequest)
@@ -180,6 +183,6 @@ func (r *Runner) RunFunction(ctx context.Context, req *v1alpha1.RunFunctionReque
 		return nil, errors.Errorf("%w: %s", err, bytes.TrimSuffix(stderr, []byte("\n")))
 	}
 
-	rsp := &v1alpha1.RunFunctionResponse{}
+	rsp := &v1beta1.RunFunctionResponse{}
 	return rsp, errors.Wrap(proto.Unmarshal(stdout, rsp), errUnmarshalResponse)
 }

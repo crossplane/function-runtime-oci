@@ -19,5 +19,22 @@ package config
 
 // Args contains the default registry used to pull XFN containers.
 type Args struct {
-	Registry string `short:"r" help:"Default registry used to fetch containers when not specified in tag." default:"${default_registry}" env:"REGISTRY"`
+	ImageTarBall string `short:"i" help:"Image tarball to be used for the function." default:"" env:"IMAGE_TARBALL"`
 }
+
+// ResourcesConfig contains the resources configuration for the function.
+type ResourcesConfig struct {
+	MemoryLimit   string        `help:"Memory, in bytes. (500Gi = 500GiB = 500 * 1024 * 1024 * 1024). Specified in Kubernetes-style resource.Quantity form." default:""`
+	CPULimit      string        `help:"CPU, in cores. (500m = .5 cores). Specified in Kubernetes-style resource.Quantity form." default:""`
+	NetworkPolicy NetworkPolicy `help:"NetworkPolicy configures whether a container is isolated from the network." enum:"Runner,Isolated" default:"Isolated"`
+}
+
+// NetworkPolicy configures whether a container is isolated from the network.
+type NetworkPolicy string
+
+const (
+	// NetworkPolicyRunner allows the container to access the same network as the function runner.
+	NetworkPolicyRunner NetworkPolicy = "Runner"
+	// NetworkPolicyIsolated runs the container without network access. The default.
+	NetworkPolicyIsolated NetworkPolicy = "Isolated"
+)

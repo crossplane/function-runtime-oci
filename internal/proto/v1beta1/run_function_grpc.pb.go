@@ -17,7 +17,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.3.0
 // - protoc             (unknown)
-// source: apiextensions/fn/proto/v1beta1/run_function.proto
+// source: v1beta1/run_function.proto
 
 package v1beta1
 
@@ -122,5 +122,5 @@ var FunctionRunnerService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "apiextensions/fn/proto/v1beta1/run_function.proto",
+	Metadata: "v1beta1/run_function.proto",
 }

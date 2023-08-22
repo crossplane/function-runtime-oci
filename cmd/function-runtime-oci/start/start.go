@@ -19,6 +19,8 @@ limitations under the License.
 package start
 
 import (
+	"compress/gzip"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -36,11 +38,11 @@ const (
 
 // Command starts a gRPC API to run Composition Functions.
 type Command struct {
-	CacheDir   string `short:"c" help:"Directory used for caching function images and containers." default:"/function-runtime-oci"`
+	CacheDir   string `short:"c" help:"Directory used for caching function images and containers." default:"/function-runtime-oci-cache"`
 	MapRootUID int    `help:"UID that will map to 0 in the function's user namespace. The following 65336 UIDs must be available. Ignored if function-runtime-oci does not have CAP_SETUID and CAP_SETGID." default:"100000"`
 	MapRootGID int    `help:"GID that will map to 0 in the function's user namespace. The following 65336 GIDs must be available. Ignored if function-runtime-oci does not have CAP_SETUID and CAP_SETGID." default:"100000"`
-	Network    string `help:"Network on which to listen for gRPC connections." default:"unix"`
-	Address    string `help:"Address at which to listen for gRPC connections." default:"@crossplane/fn/default.sock"`
+	Network    string `help:"Network on which to listen for gRPC connections." default:"tcp"`
+	Address    string `help:"Address at which to listen for gRPC connections." default:"0.0.0.0:1234"`
 }
 
 // Run a Composition Function gRPC API.
@@ -55,12 +57,51 @@ func (c *Command) Run(args *config.Args, log logging.Logger) error {
 		rootGID = c.MapRootGID
 	}
 
+	compressedTarball, err := os.Open(args.ImageTarBall)
+	if err != nil {
+		return errors.Wrap(err, "cannot open image tarball")
+	}
+	defer func() {
+		_ = compressedTarball.Close()
+	}()
+	dst, err := os.Create(filepath.Join(c.CacheDir, args.ImageTarBall))
+	if err != nil {
+		return errors.Wrap(err, "cannot open destination file for tarball")
+	}
+	src, err := gzip.NewReader(compressedTarball)
+	if err != nil {
+		return errors.Wrap(err, "cannot create gzip reader")
+	}
+	_, err = copyChunks(dst, src, 1024*1024)
+	if err != nil {
+		return errors.Wrap(err, "cannot decompress image tarball")
+	}
+
 	// TODO(negz): Expose a healthz endpoint and otel metrics.
 	f := container.NewRunner(
 		container.SetUID(setuid),
 		container.MapToRoot(rootUID, rootGID),
-		container.WithCacheDir(filepath.Clean(c.CacheDir)),
 		container.WithLogger(log),
-		container.WithRegistry(args.Registry))
+		container.WithImageTarBall(dst.Name()))
 	return errors.Wrap(f.ListenAndServe(c.Network, c.Address), errListenAndServe)
+}
+
+// copyChunks pleases gosec per https://github.com/securego/gosec/pull/433.
+// Like Copy it reads from src until EOF, it does not treat an EOF from Read as
+// an error to be reported.
+//
+// NOTE(negz): This rule confused me at first because io.Copy appears to use a
+// buffer, but in fact it bypasses it if src/dst is an io.WriterTo/ReaderFrom.
+func copyChunks(dst io.Writer, src io.Reader, chunkSize int64) (int64, error) {
+	var written int64
+	for {
+		w, err := io.CopyN(dst, src, chunkSize)
+		written += w
+		if errors.Is(err, io.EOF) {
+			return written, nil
+		}
+		if err != nil {
+			return written, err
+		}
+	}
 }

@@ -21,26 +21,25 @@ package spark
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"time"
-
-	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/google/uuid"
-	runtime "github.com/opencontainers/runtime-spec/specs-go"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/crossplane/crossplane-runtime/pkg/errors"
+	"github.com/google/go-containerregistry/pkg/v1/tarball"
+	"github.com/google/uuid"
+	runtime "github.com/opencontainers/runtime-spec/specs-go"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/crossplane/function-runtime-oci/cmd/function-runtime-oci/internal/config"
-	"github.com/crossplane/function-runtime-oci/internal/oci"
 	"github.com/crossplane/function-runtime-oci/internal/oci/spec"
 	"github.com/crossplane/function-runtime-oci/internal/oci/store"
 	"github.com/crossplane/function-runtime-oci/internal/oci/store/overlay"
 	"github.com/crossplane/function-runtime-oci/internal/oci/store/uncompressed"
-	"github.com/crossplane/function-runtime-oci/internal/proto/v1alpha1"
+	"github.com/crossplane/function-runtime-oci/internal/proto/v1beta1"
 )
 
 // Error strings.
@@ -48,34 +47,28 @@ const (
 	errReadRequest      = "cannot read request from stdin"
 	errUnmarshalRequest = "cannot unmarshal request data from stdin"
 	errNewBundleStore   = "cannot create OCI runtime bundle store"
-	errNewDigestStore   = "cannot create OCI image digest store"
-	errParseRef         = "cannot parse OCI image reference"
-	errPull             = "cannot pull OCI image"
+	errOpenTarBall      = "cannot open OCI image tarball"
 	errBundleFn         = "cannot create OCI runtime bundle"
 	errMkRuntimeRootdir = "cannot make OCI runtime cache"
-	errRuntime          = "OCI runtime error"
 	errCleanupBundle    = "cannot cleanup OCI runtime bundle"
 	errMarshalResponse  = "cannot marshal response data to stdout"
 	errWriteResponse    = "cannot write response data to stdout"
 	errCPULimit         = "cannot limit container CPU"
 	errMemoryLimit      = "cannot limit container memory"
 	errHostNetwork      = "cannot configure container to run in host network namespace"
+	errMarshalRequest   = "cannot marshal request data to stdout"
 )
 
 // The path within the cache dir that the OCI runtime should use for its
 // '--root' cache.
 const ociRuntimeRoot = "runtime"
 
-// The time after which the OCI runtime will be killed if none is specified in
-// the RunFunctionRequest.
-const defaultTimeout = 25 * time.Second
-
 // Command runs a containerized Composition Function.
 type Command struct {
-	CacheDir      string `short:"c" help:"Directory used for caching function images and containers." default:"/function-runtime-oci"`
-	Runtime       string `help:"OCI runtime binary to invoke." default:"crun"`
-	MaxStdioBytes int64  `help:"Maximum size of stdout and stderr for functions." default:"0"`
-	CABundlePath  string `help:"Additional CA bundle to use when fetching function images from registry." env:"CA_BUNDLE_PATH"`
+	CacheDir               string `short:"c" help:"Directory used for caching function images and containers." default:"/function-runtime-oci-cache"`
+	Runtime                string `help:"OCI runtime binary to invoke." default:"crun"`
+	MaxStdioBytes          int64  `help:"Maximum size of stdout and stderr for functions." default:"0"`
+	config.ResourcesConfig `embed:"" prefix:"resources"`
 }
 
 // Run a Composition Function inside an unprivileged user namespace. Reads a
@@ -87,17 +80,10 @@ func (c *Command) Run(args *config.Args) error { //nolint:gocyclo // TODO(negz):
 		return errors.Wrap(err, errReadRequest)
 	}
 
-	req := &v1alpha1.RunFunctionRequest{}
-	if err := proto.Unmarshal(pb, req); err != nil {
+	req := &v1beta1.RunFunctionRequest{}
+	if err := json.Unmarshal(pb, req); err != nil {
 		return errors.Wrap(err, errUnmarshalRequest)
 	}
-
-	t := req.GetRunFunctionConfig().GetTimeout().AsDuration()
-	if t == 0 {
-		t = defaultTimeout
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), t)
-	defer cancel()
 
 	runID := uuid.NewString()
 
@@ -116,38 +102,18 @@ func (c *Command) Run(args *config.Args) error { //nolint:gocyclo // TODO(negz):
 		return errors.Wrap(err, errNewBundleStore)
 	}
 
-	// This store maps OCI references to their last known digests. We use it to
-	// resolve references when the imagePullPolicy is Never or IfNotPresent.
-	h, err := store.NewDigest(c.CacheDir)
+	// We cache the image to the filesystem. Layers are cached as uncompressed
+	// tarballs. This allows them to be extracted quickly when using the
+	// uncompressed.Bundler, which extracts a new root filesystem for every
+	// container run.
+	img, err := tarball.ImageFromPath(args.ImageTarBall, nil)
 	if err != nil {
-		return errors.Wrap(err, errNewDigestStore)
+		return errors.Wrap(err, errOpenTarBall)
 	}
 
-	r, err := name.ParseReference(req.GetImage(), name.WithDefaultRegistry(args.Registry))
-	if err != nil {
-		return errors.Wrap(err, errParseRef)
-	}
-
-	opts := []oci.ImageClientOption{FromImagePullConfig(req.GetImagePullConfig())}
-	if c.CABundlePath != "" {
-		rootCA, err := oci.ParseCertificatesFromPath(c.CABundlePath)
-		if err != nil {
-			return errors.Wrap(err, "Cannot parse CA bundle")
-		}
-		opts = append(opts, oci.WithCustomCA(rootCA))
-	}
-	// We cache every image we pull to the filesystem. Layers are cached as
-	// uncompressed tarballs. This allows them to be extracted quickly when
-	// using the uncompressed.Bundler, which extracts a new root filesystem for
-	// every container run.
-	p := oci.NewCachingPuller(h, store.NewImage(c.CacheDir), &oci.RemoteClient{})
-	img, err := p.Image(ctx, r, opts...)
-	if err != nil {
-		return errors.Wrap(err, errPull)
-	}
-
+	ctx := context.Background()
 	// Create an OCI runtime bundle for this container run.
-	b, err := s.Bundle(ctx, img, runID, FromRunFunctionConfig(req.GetRunFunctionConfig()))
+	b, err := s.Bundle(ctx, img, runID, FromResourcesConfig(&c.ResourcesConfig))
 	if err != nil {
 		return errors.Wrap(err, errBundleFn)
 	}
@@ -166,54 +132,55 @@ func (c *Command) Run(args *config.Args) error { //nolint:gocyclo // TODO(negz):
 
 	//nolint:gosec // Executing with user-supplied input is intentional.
 	cmd := exec.CommandContext(ctx, c.Runtime, "--root="+root, "run", "--bundle="+b.Path(), runID)
-	cmd.Stdin = bytes.NewReader(req.GetInput())
+	reqJSON, err := protojson.Marshal(req)
+	if err != nil {
+		return errors.Wrap(err, errMarshalRequest)
+	}
+	cmd.Stdin = bytes.NewReader(reqJSON)
 
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
 		_ = b.Cleanup()
-		return errors.Wrap(err, errRuntime)
+
+		return errors.Wrap(err, "cannot get stdout pipe")
 	}
 	stderrPipe, err := cmd.StderrPipe()
 	if err != nil {
 		_ = b.Cleanup()
-		return errors.Wrap(err, errRuntime)
+		return errors.Wrap(err, "cannot get stderr pipe")
 	}
 
 	if err := cmd.Start(); err != nil {
 		_ = b.Cleanup()
-		return errors.Wrap(err, errRuntime)
+		return errors.Wrap(err, "cannot start command")
 	}
 
 	stdout, err := io.ReadAll(limitReaderIfNonZero(stdoutPipe, c.MaxStdioBytes))
 	if err != nil {
 		_ = b.Cleanup()
-		return errors.Wrap(err, errRuntime)
+		return errors.Wrap(err, "cannot read stdout")
 	}
 	stderr, err := io.ReadAll(limitReaderIfNonZero(stderrPipe, c.MaxStdioBytes))
 	if err != nil {
 		_ = b.Cleanup()
-		return errors.Wrap(err, errRuntime)
+		return errors.Wrap(err, "cannot read stderr")
 	}
 
 	if err := cmd.Wait(); err != nil {
+		msg := "while waiting for command"
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
-			exitErr.Stderr = stderr
+			msg = fmt.Sprintf("%s: %s", msg, string(stderr))
 		}
 		_ = b.Cleanup()
-		return errors.Wrap(err, errRuntime)
+		return errors.Wrap(err, msg)
 	}
 
 	if err := b.Cleanup(); err != nil {
 		return errors.Wrap(err, errCleanupBundle)
 	}
 
-	rsp := &v1alpha1.RunFunctionResponse{Output: stdout}
-	pb, err = proto.Marshal(rsp)
-	if err != nil {
-		return errors.Wrap(err, errMarshalResponse)
-	}
-	_, err = os.Stdout.Write(pb)
+	_, err = os.Stdout.Write(stdout)
 	return errors.Wrap(err, errWriteResponse)
 }
 
@@ -224,47 +191,26 @@ func limitReaderIfNonZero(r io.Reader, limit int64) io.Reader {
 	return io.LimitReader(r, limit)
 }
 
-// FromImagePullConfig configures an image client with options derived from the
-// supplied ImagePullConfig.
-func FromImagePullConfig(cfg *v1alpha1.ImagePullConfig) oci.ImageClientOption {
-	return func(o *oci.ImageClientOptions) {
-		switch cfg.GetPullPolicy() {
-		case v1alpha1.ImagePullPolicy_IMAGE_PULL_POLICY_ALWAYS:
-			oci.WithPullPolicy(oci.ImagePullPolicyAlways)(o)
-		case v1alpha1.ImagePullPolicy_IMAGE_PULL_POLICY_NEVER:
-			oci.WithPullPolicy(oci.ImagePullPolicyNever)(o)
-		case v1alpha1.ImagePullPolicy_IMAGE_PULL_POLICY_IF_NOT_PRESENT, v1alpha1.ImagePullPolicy_IMAGE_PULL_POLICY_UNSPECIFIED:
-			oci.WithPullPolicy(oci.ImagePullPolicyIfNotPresent)(o)
-		}
-		if a := cfg.GetAuth(); a != nil {
-			oci.WithPullAuth(&oci.ImagePullAuth{
-				Username:      a.GetUsername(),
-				Password:      a.GetPassword(),
-				Auth:          a.GetAuth(),
-				IdentityToken: a.GetIdentityToken(),
-				RegistryToken: a.GetRegistryToken(),
-			})(o)
-		}
-	}
-}
-
-// FromRunFunctionConfig extends a runtime spec with configuration derived from
+// FromResourcesConfig extends a runtime spec with configuration derived from
 // the supplied RunFunctionConfig.
-func FromRunFunctionConfig(cfg *v1alpha1.RunFunctionConfig) spec.Option {
+func FromResourcesConfig(cfg *config.ResourcesConfig) spec.Option {
 	return func(s *runtime.Spec) error {
-		if l := cfg.GetResources().GetLimits().GetCpu(); l != "" {
+		if cfg == nil {
+			return nil
+		}
+		if l := cfg.CPULimit; l != "" {
 			if err := spec.WithCPULimit(l)(s); err != nil {
 				return errors.Wrap(err, errCPULimit)
 			}
 		}
 
-		if l := cfg.GetResources().GetLimits().GetMemory(); l != "" {
+		if l := cfg.MemoryLimit; l != "" {
 			if err := spec.WithMemoryLimit(l)(s); err != nil {
 				return errors.Wrap(err, errMemoryLimit)
 			}
 		}
 
-		if cfg.GetNetwork().GetPolicy() == v1alpha1.NetworkPolicy_NETWORK_POLICY_RUNNER {
+		if cfg.NetworkPolicy == config.NetworkPolicyRunner {
 			if err := spec.WithHostNetwork()(s); err != nil {
 				return errors.Wrap(err, errHostNetwork)
 			}

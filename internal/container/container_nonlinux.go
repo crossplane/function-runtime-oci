@@ -23,7 +23,7 @@ import (
 
 	"github.com/crossplane/crossplane-runtime/pkg/errors"
 
-	"github.com/crossplane/function-runtime-oci/internal/proto/v1alpha1"
+	"github.com/crossplane/function-runtime-oci/internal/proto/v1beta1"
 )
 
 const errLinuxOnly = "containerized functions are only supported on Linux"
@@ -35,6 +35,6 @@ func HasCapSetUID() bool { return false }
 func HasCapSetGID() bool { return false }
 
 // RunFunction returns an error on non-Linux.
-func (r *Runner) RunFunction(_ context.Context, _ *v1alpha1.RunFunctionRequest) (*v1alpha1.RunFunctionResponse, error) {
+func (r *Runner) RunFunction(_ context.Context, _ *v1beta1.RunFunctionRequest) (*v1beta1.RunFunctionResponse, error) {
 	return nil, errors.New(errLinuxOnly)
 }

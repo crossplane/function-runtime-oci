@@ -77,9 +77,8 @@ func main() {
 		kong.Name("function-runtime-oci"),
 		kong.Description("Crossplane Composition Functions."),
 		kong.BindTo(logging.NewLogrLogger(zl), (*logging.Logger)(nil)),
-		kong.BindTo(cli.Args, (*config.Args)(nil)),
 		kong.UsageOnError(),
 		KongVars,
 	)
-	ctx.FatalIfErrorf(ctx.Run())
+	ctx.FatalIfErrorf(ctx.Run(&cli.Args))
 }
