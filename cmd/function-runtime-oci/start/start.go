@@ -53,9 +53,11 @@ func (c *Command) Run(args *config.Args, log logging.Logger) error {
 	rootGID := os.Getgid()
 	setuid := container.HasCapSetUID() && container.HasCapSetGID() // We're using 'setuid' as shorthand for both here.
 	if setuid {
+		log.Debug("CAP_SETUID and CAP_SETGID are available")
 		rootUID = c.MapRootUID
 		rootGID = c.MapRootGID
 	}
+	log.Debug("root UID and GID in function's user namespace", "uid", rootUID, "gid", rootGID)
 
 	compressedTarball, err := os.Open(args.ImageTarBall)
 	if err != nil {
@@ -76,6 +78,8 @@ func (c *Command) Run(args *config.Args, log logging.Logger) error {
 	if err != nil {
 		return errors.Wrap(err, "cannot decompress image tarball")
 	}
+
+	log.Debug("image tarball copied to cache", "src", args.ImageTarBall, "path", dst.Name())
 
 	// TODO(negz): Expose a healthz endpoint and otel metrics.
 	f := container.NewRunner(

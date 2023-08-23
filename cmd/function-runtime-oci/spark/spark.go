@@ -51,7 +51,6 @@ const (
 	errBundleFn         = "cannot create OCI runtime bundle"
 	errMkRuntimeRootdir = "cannot make OCI runtime cache"
 	errCleanupBundle    = "cannot cleanup OCI runtime bundle"
-	errMarshalResponse  = "cannot marshal response data to stdout"
 	errWriteResponse    = "cannot write response data to stdout"
 	errCPULimit         = "cannot limit container CPU"
 	errMemoryLimit      = "cannot limit container memory"

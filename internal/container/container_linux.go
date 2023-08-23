@@ -21,14 +21,14 @@ package container
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"google.golang.org/protobuf/proto"
 	"io"
+	"kernel.org/pub/linux/libs/security/libcap/cap"
 	"os"
 	"os/exec"
 	"syscall"
-
-	"google.golang.org/protobuf/proto"
-	"kernel.org/pub/linux/libs/security/libcap/cap"
 
 	"github.com/crossplane/crossplane-runtime/pkg/errors"
 
@@ -83,6 +83,7 @@ func HasCapSetGID() bool {
 // return non-zero, or that cannot be executed in the first place (e.g. because
 // they cannot be fetched from the registry) will return an error.
 func (r *Runner) RunFunction(ctx context.Context, req *v1beta1.RunFunctionRequest) (*v1beta1.RunFunctionResponse, error) {
+	r.log.Debug("Running function", "request", req)
 
 	/*
 		We want to create an overlayfs with the cached rootfs as the lower layer
@@ -103,6 +104,7 @@ func (r *Runner) RunFunction(ctx context.Context, req *v1beta1.RunFunctionReques
 		"--image-tar-ball="+r.imageTarBall,
 		// TODO(phisco): pass the resources via the spark flags --resources.memory-limit/cpu-limit/network-policy
 	)
+	r.log.Debug("Running command", "command", cmd)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Cloneflags:  syscall.CLONE_NEWUSER | syscall.CLONE_NEWNS,
 		UidMappings: []syscall.SysProcIDMap{{ContainerID: 0, HostID: r.rootUID, Size: 1}},
@@ -114,6 +116,7 @@ func (r *Runner) RunFunction(ctx context.Context, req *v1beta1.RunFunctionReques
 	// its parent. We can also drop privileges (in the parent user namespace) by
 	// running spark as root in the user namespace.
 	if r.setuid {
+		r.log.Debug("Setting UID and GID mappings", "uid", r.rootUID, "gid", r.rootGID)
 		cmd.SysProcAttr.UidMappings = []syscall.SysProcIDMap{{ContainerID: 0, HostID: r.rootUID, Size: UserNamespaceUIDs}}
 		cmd.SysProcAttr.GidMappings = []syscall.SysProcIDMap{{ContainerID: 0, HostID: r.rootGID, Size: UserNamespaceGIDs}}
 		cmd.SysProcAttr.GidMappingsEnableSetgroups = true
@@ -146,13 +149,15 @@ func (r *Runner) RunFunction(ctx context.Context, req *v1beta1.RunFunctionReques
 		return nil, errors.Wrap(err, errCreateStdioPipes)
 	}
 
-	b, err := proto.Marshal(req)
-	if err != nil {
-		return nil, errors.Wrap(err, errMarshalRequest)
-	}
+	r.log.Debug("Starting command", "command", cmd)
 	if err := cmd.Start(); err != nil {
 		return nil, errors.Wrap(err, fmt.Sprintf(errFmtStartSpark, cmd.Args))
 	}
+	b, err := json.Marshal(req)
+	if err != nil {
+		return nil, errors.Wrap(err, errMarshalRequest)
+	}
+	r.log.Debug("Writing request to stdin", "request", string(b))
 	if _, err := stdio.Stdin.Write(b); err != nil {
 		return nil, errors.Wrap(err, errWriteRequest)
 	}
@@ -172,12 +177,15 @@ func (r *Runner) RunFunction(ctx context.Context, req *v1beta1.RunFunctionReques
 	if err != nil {
 		return nil, errors.Wrap(err, errReadStdout)
 	}
+	r.log.Debug("Read stdout", "stdout", string(stdout))
 
 	stderr, err := io.ReadAll(io.LimitReader(stdio.Stderr, MaxStdioBytes))
 	if err != nil {
 		return nil, errors.Wrap(err, errReadStderr)
 	}
+	r.log.Debug("Read stderr", "stderr", string(stderr))
 
+	r.log.Debug("Waiting for command to exit", "command", cmd)
 	if err := cmd.Wait(); err != nil {
 		// TODO(negz): Handle stderr being too long to be a useful error.
 		return nil, errors.Errorf("%w: %s", err, bytes.TrimSuffix(stderr, []byte("\n")))
