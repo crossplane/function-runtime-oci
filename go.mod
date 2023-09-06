@@ -7,7 +7,7 @@ require (
 	github.com/alecthomas/kong v0.8.0
 	github.com/bufbuild/buf v1.26.1
 	github.com/crossplane/crossplane-runtime v1.13.0
-	github.com/cyphar/filepath-securejoin v0.2.3
+	github.com/cyphar/filepath-securejoin v0.2.4
 	github.com/google/go-cmp v0.5.9
 	github.com/google/go-containerregistry v0.16.1
 	github.com/google/uuid v1.3.1
