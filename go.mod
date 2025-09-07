@@ -1,6 +1,6 @@
 module github.com/crossplane/function-runtime-oci
 
-go 1.20
+go 1.24.0
 
 require (
 	github.com/Masterminds/semver v1.5.0
@@ -12,7 +12,7 @@ require (
 	github.com/google/go-containerregistry v0.16.1
 	github.com/google/uuid v1.3.1
 	github.com/opencontainers/runtime-spec v1.1.0
-	golang.org/x/sync v0.3.0
+	golang.org/x/sync v0.17.0
 	golang.org/x/sys v0.12.0
 	google.golang.org/grpc v1.58.3
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.3.0
