@@ -377,7 +377,8 @@ type Groups struct {
 }
 
 // ParsePasswdFiles parses the passwd and group files at the supplied paths. If
-// either path does not exist it returns empty Passwd data.
+// the passwd file does not exist it returns empty Passwd data. If the group
+// file does not exist it parses passwd data without supplementary groups.
 func ParsePasswdFiles(passwd, group string) (Passwd, error) {
 	p, err := os.Open(passwd) //nolint:gosec // We intentionally take a variable here.
 	if errors.Is(err, os.ErrNotExist) {
@@ -390,7 +391,7 @@ func ParsePasswdFiles(passwd, group string) (Passwd, error) {
 
 	g, err := os.Open(group) //nolint:gosec // We intentionally take a variable here.
 	if errors.Is(err, os.ErrNotExist) {
-		return Passwd{}, nil
+		return ParsePasswd(p, strings.NewReader(""))
 	}
 	if err != nil {
 		return Passwd{}, errors.Wrap(err, errOpenGroupFile)
