@@ -306,6 +306,12 @@ func TestWithHostNetwork(t *testing.T) {
 }
 
 func TestWithImageConfig(t *testing.T) {
+	tmp := t.TempDir()
+	passwd := filepath.Join(tmp, "passwd")
+	if err := os.WriteFile(passwd, []byte("negz:x:1000:100::/home/negz:/bin/sh\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
 	type args struct {
 		cfg    *ociv1.ConfigFile
 		passwd string
@@ -380,6 +386,31 @@ func TestWithImageConfig(t *testing.T) {
 						},
 					},
 					Hostname: "coolhost",
+				},
+			},
+		},
+		"UserWithNoGroupFile": {
+			reason: "We should resolve image config users when the rootfs has passwd data but no group file.",
+			s:      &runtime.Spec{},
+			args: args{
+				cfg: &ociv1.ConfigFile{
+					Config: ociv1.Config{
+						Entrypoint: []string{"/bin/sh"},
+						User:       "negz",
+					},
+				},
+				passwd: passwd,
+				group:  filepath.Join(tmp, "group"),
+			},
+			want: want{
+				s: &runtime.Spec{
+					Process: &runtime.Process{
+						Args: []string{"/bin/sh"},
+						User: runtime.User{
+							UID: 1000,
+							GID: 100,
+						},
+					},
 				},
 			},
 		},
@@ -578,13 +609,24 @@ users:x:100:primary,doesnotexist
 			},
 		},
 		"NoGroupFile": {
-			reason: "We should not return an error if the group file doesn't exist.",
+			reason: "We should parse passwd data without supplementary groups if the group file doesn't exist.",
 			args: args{
 				passwd: filepath.Join(tmp, "passwd"),
 				group:  filepath.Join(tmp, "nonexist"),
 			},
 			want: want{
-				p: Passwd{},
+				p: Passwd{
+					UID: map[Username]UID{
+						"root":    0,
+						"negz":    1000,
+						"primary": 1001,
+					},
+					Groups: map[UID]Groups{
+						0:    {PrimaryGID: 0},
+						1000: {PrimaryGID: 100},
+						1001: {PrimaryGID: 100},
+					},
+				},
 			},
 		},
 		"Success": {
